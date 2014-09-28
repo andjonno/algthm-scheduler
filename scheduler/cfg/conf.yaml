@@ -9,7 +9,7 @@ mq:
   queue_name: indexing
   feed_size: 100
   smoothing_constant: 0.2
-  max_retries: 1
+  max_retries: 3
   max_sleep: 10
   connection:
     host: localhost

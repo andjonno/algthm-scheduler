@@ -29,7 +29,7 @@ def start_session(db_conn):
     )
 
 
-def send_notification(schedule_results=dict()):
+def send_notification(schedule_results=dict(), failures=[]):
     logger.info('Sending scheduler results to admin.')
 
     server = smtplib.SMTP('smtp.gmail.com:587')
@@ -37,19 +37,43 @@ def send_notification(schedule_results=dict()):
     server.starttls()
     server.login('jonathon.scanes@gmail.com', 'hdwY3icHable#01')
     msg = 'Subject: Scheduler completed task.' \
-          '\n\nAll repositories have been indexed in the system.\n\n' \
-          'Results\n----------------------------------\n'
-    for k in schedule_results.iterkeys():
-        msg += '{}: {}\n'.format(k, schedule_results[k])
+          '\n\nAll repositories have been indexed in the system.\n'
+
+    # Iterate through results
+    if schedule_results:
+        msg += '\nResults\n----------------------------------\n'
+        for k in schedule_results.iterkeys():
+            msg += '{}: {}\n'.format(k, schedule_results[k])
+
+    # Iterate through failures
+    if failures:
+        msg += '\nFailures\n----------------------------------\n'
+        i = 1
+        failures_list = []
+        for f in failures:
+            for k in f.iterkeys():
+                failures_list.append('{}: {}'.format(k, f[k]))
+            msg += '#{}\t=>\t[{}]'.format(i, (', '.join(failures_list)))
+            i += 1
+
     msg += '\n\nAlgthm Scheduler System'
-    server.sendmail('Algthm Automation <systems@algthm.com>', 'me@jscanes.com',
-                    msg)
+    server.sendmail('Algthm <systems@algthm.com>', 'me@jscanes.com', msg)
     server.quit()
 
 
 def main():
     # Establish Connections to External Systems. Mongo and MQ
+    welcome = '''
+ ______     ______     __  __     ______     _____.    __  __     __         ______     ______
+/\  ___\   /\  ___\   /\ \_\ \   /\  ___\   /\  __ \. /\ \/\ \   /\ \       /\  ___\   /\  == \\
+\ \___  \  \ \ \____  \ \  __ \  \ \  __\   \ \ \/\ \ \ \ \_\ \  \ \ \____  \ \  __\   \ \  __<
+ \/\_____\  \ \_____\  \ \_\ \_\  \ \_____\  \ \____-  \ \_____\  \ \_____\  \ \_____\  \ \_\ \_\\
+  \/_____/   \/_____/   \/_/\/_/   \/_____/   \/____/   \/_____/   \/_____/   \/_____/   \/_/ /_/
 
+  Scheduler module v0.0.1. Copyright 2014 Algthm.
+  Log: /Users/jon/tmp/scheduler.log
+'''
+    print '\033[1;33m{}\033[0m'.format(welcome)
     try:
         print '> connecting to MQ @ {} ..'\
             .format(cfg.settings.mq.connection.host),
@@ -74,12 +98,13 @@ def main():
         # Run the feeder
         scheduler = Scheduling(db_conn=db_conn, mq_conn=mq_conn)
         results = scheduler.schedule()
-
-        # Send admin notification
-        send_notification(results)
+        failures = scheduler.get_failures()
 
     except Exception as e:
         print 'Scheduler boot failure:', e
+
+    finally:
+        send_notification(results, failures)
 
 if __name__ == "__main__":
     main()

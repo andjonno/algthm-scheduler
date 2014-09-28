@@ -120,15 +120,14 @@ class Scheduling:
         used here to assist in determining the appropriate time to repopulate
         the queue.
         """
-        timeout = 1
         api_url = 'http://{}:{}'.format(cfg.settings.mq.connection.host,
                                         cfg.settings.mq.connection.port)
         fed = 0
-        repositories_to_feed = self.db_conn.repositories.find({'state': 0})\
-            .count()
+        repositories_to_feed = self.db_conn.repositories.find(
+            {'state': 0, 'error_count': 0}).count()
         start_time = datetime.today()
 
-        while timeout:
+        while not self.__stop_feeding:
             data = get(urljoin(api_url,
                         '/api/queues/%2f/{}?columns=backing_queue_status.'
                         'avg_ack_egress_rate,messages'.format(
@@ -151,7 +150,6 @@ class Scheduling:
                     messages += self.FEED_SIZE
                 else:
                     sleep_remaining = messages / self.forecast
-                    timeout = int(sleep_remaining / self.FEED_MAX_SLEEP)
 
             # determine sleep time required to get to buffer
             sleep = (messages - (self.FEED_BUFFER if messages >
@@ -166,7 +164,7 @@ class Scheduling:
         duration = datetime.today() - start_time
         return dict(fed=fed, duration=duration)
 
-    def report_failures(self):
+    def get_failures(self):
         """
         Method gets all repositories that failed to be indexed and places them
         on report.
@@ -180,31 +178,10 @@ class Scheduling:
             for failure in result:
                 failures.append(failure)
 
-            if len(failures) > 0:
-                logger.info('Reporting {} failures for session#{}'
-                            .format(len(failures), self.session_id))
-                for failure in failures:
-                    self.db_conn.repositories.update(
-                        {
-                            '_id': failure.get('_id')
-                        },
-                        {
-                            '$set': {
-                                'on_report': True,
-                                'comment': failure.get('comment')
-                            }
-                        },
-                        upsert=True,
-                        multi=True
-                    )
-
-                fmt = "\033[1;31mReported\033[0m - {} {}"
-                for failure in failures:
-                    logger.info(fmt.format(failure.get('_id'),
-                                           failure.get('comment')))
-
         except Error as err:
             print err
+
+        return failures
 
     #---------------------------------------------------------------------------
     #   HELPERS
@@ -213,8 +190,7 @@ class Scheduling:
     def __set_flag_processing(self, ids):
         """
         Sets the list of repositories to 'processing' in the database. Should be
-        called immediately after the FEEDER
-        STMT is executed.
+        called immediately after the FEEDER select statement is executed.
         """
         # insert to db
         for _id in ids:
