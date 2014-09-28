@@ -1,0 +1,25 @@
+general:
+  env: dev
+
+constants:
+  ENV_DB_HOST: ALGTHM_DB_HOST
+  ENV_DB_PORT: ALGTHM_DB_PORT
+
+mq:
+  queue_name: indexing
+  feed_size: 100
+  smoothing_constant: 0.2
+  max_retries: 1
+  max_sleep: 10
+  connection:
+    host: localhost
+    port: 15672
+    username: guest
+    password: guest
+
+environments:
+  dev:
+    db: algthm_development
+
+  test:
+    db: algthm_test
