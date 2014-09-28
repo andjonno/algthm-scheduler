@@ -3,7 +3,7 @@ Logging singleton. Ensures logging is consistent across the entire application. 
 the `conf/` directory. This logger subclasses the python `logging` module.
 """
 
-__author__ = 'Jon Scanes <me@jscanes.com>'
+__author__ = 'Jonathon Scanes <me@jscanes.com>'
 
 import logging
 import logging.config

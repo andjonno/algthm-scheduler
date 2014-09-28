@@ -11,7 +11,7 @@ from requests import get
 from datetime import datetime
 
 
-logger = logger.get_logger('dex')
+logger = logger.get_logger('scheduler')
 requests_logger = getLogger('requests')
 requests_logger.setLevel(CRITICAL)
 
@@ -93,7 +93,7 @@ class Scheduling:
             for repo in results:
                 items.append((repo['_id'], repo['url']))
 
-            print 'Scheduling {} messages'.format(len(items))
+            logger.info('Scheduling {} messages'.format(len(items)))
 
             # update selected repo status' to 'processing=1'
             if len(items):
@@ -106,6 +106,8 @@ class Scheduling:
             else:
                 logger.info('\033[1;37mFeeding exhausted.\033[0m')
                 self.__stop_feeding = True
+
+            return len(items)
 
         except Error as err:
             # TODO: implement error handling
@@ -121,6 +123,10 @@ class Scheduling:
         timeout = 1
         api_url = 'http://{}:{}'.format(cfg.settings.mq.connection.host,
                                         cfg.settings.mq.connection.port)
+        fed = 0
+        repositories_to_feed = self.db_conn.repositories.find({'state': 0})\
+            .count()
+        start_time = datetime.today()
 
         while timeout:
             data = get(urljoin(api_url,
@@ -141,7 +147,7 @@ class Scheduling:
 
             if messages <= self.FEED_BUFFER:
                 if not self.__stop_feeding:
-                    self.feed()
+                    fed += self.feed()
                     messages += self.FEED_SIZE
                 else:
                     sleep_remaining = messages / self.forecast
@@ -151,10 +157,14 @@ class Scheduling:
             sleep = (messages - (self.FEED_BUFFER if messages >
                         self.FEED_BUFFER else 0)) / self.forecast
             self.sleep = self.FEED_MAX_SLEEP if sleep > \
-                            self.FEED_MAX_SLEEP else sleep
+                        self.FEED_MAX_SLEEP else sleep
 
-            print 'Sleeping..'
+            logger.info('Status demand: {}, forecast: {}, progress: {}%'.format(
+                self.demand, self.forecast, (fed / (repositories_to_feed * 1.0)) * 100))
             time.sleep(self.sleep)
+
+        duration = datetime.today() - start_time
+        return dict(fed=fed, duration=duration)
 
     def report_failures(self):
         """
